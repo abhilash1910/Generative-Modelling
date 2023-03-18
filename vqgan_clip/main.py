@@ -15,7 +15,8 @@ import os
 
 from omegaconf import OmegaConf
 
-from taming.models import cond_transformer, vqgan
+#from taming.models import cond_transformer, vqgan
+from models import vqgan,cond_transformer
 
 import torch
 from torch import nn, optim
@@ -196,14 +197,14 @@ def checkin(i, losses):
     out = synth(z)
     info = PngImagePlugin.PngInfo()
     info.add_text('comment', f'{args.prompts}')
-    TF.to_pil_image(out[0].cpu()).save(args.output, pnginfo=info) 	
+    TF.to_pil_image(out[0].cpu()).save(args.output, pnginfo=info)
 
 
 def ascend_txt():
     global i
     out = synth(z)
     iii = perceptor.encode_image(normalize(make_cutouts(out))).float()
-    
+
     result = []
 
     if args.init_weight:
@@ -212,8 +213,8 @@ def ascend_txt():
 
     for prompt in pMs:
         result.append(prompt(iii))
-    
-    if args.make_video:    
+
+    if args.make_video:
         img = np.array(out.mul(255).clamp(0, 255)[0].cpu().detach().numpy().astype(np.uint8))[:,:,:]
         img = np.transpose(img, (1, 2, 0))
         imageio.imwrite('./steps/' + str(i) + '.png', np.array(img))
@@ -224,14 +225,14 @@ def ascend_txt():
 def train(i):
     opt.zero_grad(set_to_none=True)
     lossAll = ascend_txt()
-    
+
     if i % args.display_freq == 0:
         checkin(i, lossAll)
-       
+
     loss = sum(lossAll)
     loss.backward()
     opt.step()
-    
+
     #with torch.no_grad():
     with torch.inference_mode():
         z.copy_(z.maximum(z_min).minimum(z_max))
@@ -246,7 +247,7 @@ if __name__ == '__main__':
     model = load_vqgan_model(args.vqgan_config, args.vqgan_checkpoint).to(device)
     jit = True if version.parse(torch.__version__) < version.parse('1.8.0') else False
     perceptor = clip.load(args.clip_model, jit=jit)[0].eval().requires_grad_(False).to(device)
-    
+
 
     cut_size = perceptor.visual.input_resolution
     f = 2**(model.decoder.num_resolutions - 1)
@@ -284,7 +285,7 @@ if __name__ == '__main__':
         pil_tensor = TF.to_tensor(pil_image)
         z, *_ = model.encode(pil_tensor.to(device).unsqueeze(0) * 2 - 1)
     elif args.init_noise == 'pixels':
-        img = random_noise_image(args.size[0], args.size[1])    
+        img = random_noise_image(args.size[0], args.size[1])
         pil_image = img.convert('RGB')
         pil_image = pil_image.resize((sideX, sideY), Image.LANCZOS)
         pil_tensor = TF.to_tensor(pil_image)
@@ -303,17 +304,17 @@ if __name__ == '__main__':
         else:
             z = one_hot @ model.quantize.embedding.weight
 
-        z = z.view([-1, toksY, toksX, e_dim]).permute(0, 3, 1, 2) 
+        z = z.view([-1, toksY, toksX, e_dim]).permute(0, 3, 1, 2)
         #z = torch.rand_like(z)*2						# NR: check
 
     z_orig = z.clone()
-    z.requires_grad_(True)    
+    z.requires_grad_(True)
     pMs = []
     normalize = transforms.Normalize(mean=[0.48145466, 0.4578275, 0.40821073],
                                       std=[0.26862954, 0.26130258, 0.27577711])
 
 
-    # CLIP tokenize/encode   
+    # CLIP tokenize/encode
     if args.prompts:
         for prompt in args.prompts:
             txt, weight, stop = split_prompt(prompt)
@@ -345,25 +346,25 @@ if __name__ == '__main__':
     print('Optimising using:', args.optimiser)
 
     if args.prompts:
-        print('Using text prompts:', args.prompts)  
+        print('Using text prompts:', args.prompts)
     if args.image_prompts:
         print('Using image prompts:', args.image_prompts)
     if args.init_image:
         print('Using initial image:', args.init_image)
     if args.noise_prompt_weights:
-        print('Noise prompt weights:', args.noise_prompt_weights)    
+        print('Noise prompt weights:', args.noise_prompt_weights)
 
 
     if args.seed is None:
         seed = torch.seed()
     else:
-        seed = args.seed  
+        seed = args.seed
     torch.manual_seed(seed)
     print('Using seed:', seed)
-    
-    
+
+
     i = 0 # Iteration counter
-    j = 0 # Zoom video frame counter    
+    j = 0 # Zoom video frame counter
     p = 1 # Phrase counter
     smoother = 0 # Smoother counter
     this_video_frame = 0 # for video styling
@@ -376,20 +377,20 @@ if __name__ == '__main__':
                     # In case there aren't enough phrases, just loop
                     if p >= len(all_phrases):
                         p = 0
-                    
+
                     pMs = []
                     args.prompts = all_phrases[p]
 
-                    # Show user we're changing prompt                                
+                    # Show user we're changing prompt
                     print(args.prompts)
-                    
+
                     for prompt in args.prompts:
                         txt, weight, stop = split_prompt(prompt)
                         embed = perceptor.encode_text(clip.tokenize(txt).to(device)).float()
-                        pMs.append(Prompt(embed, weight, stop).to(device))                    
+                        pMs.append(Prompt(embed, weight, stop).to(device))
                     p += 1
             train(i)
             i += 1
             pbar.update()
-    
+
     print("done")

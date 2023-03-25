@@ -565,7 +565,8 @@ class GPTNeoModel(GPTNeoPreTrainedModel):
             # positions we want to attend and the dtype's smallest value for masked positions.
             # Since we are adding it to the raw scores before the softmax, this is
             # effectively the same as removing these entirely.
-            attention_mask = attention_mask.to(dtype=self.dtype)  # fp16 compatibility
+            attention_mask=attention_mask.half()
+            #attention_mask = attention_mask.to(dtype=self.dtype)  # fp16 compatibility
             attention_mask = (1.0 - attention_mask) * torch.finfo(self.dtype).min
 
         # Prepare head mask if needed

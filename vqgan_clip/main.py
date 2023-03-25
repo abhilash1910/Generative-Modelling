@@ -16,7 +16,7 @@ import os
 from omegaconf import OmegaConf
 
 #from taming.models import cond_transformer, vqgan
-from models import vqgan,cond_transformer
+from vqgan_clip.models import vqgan,cond_transformer
 
 import torch
 from torch import nn, optim
